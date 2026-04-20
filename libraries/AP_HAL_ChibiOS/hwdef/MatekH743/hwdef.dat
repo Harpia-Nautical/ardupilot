@@ -221,5 +221,8 @@ define OSD_ENABLED 1
 define HAL_OSD_TYPE_DEFAULT 1
 ROMFS_WILDCARD libraries/AP_OSD/fonts/font*.bin
 
+# enable MaxBotix serial rangefinder
+define AP_RANGEFINDER_MAXBOTIX_SERIAL_ENABLED 1
+
 # build ABIN for flash-from-bootloader support:
 env BUILD_ABIN True
