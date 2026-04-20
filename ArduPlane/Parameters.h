@@ -346,6 +346,17 @@ public:
         k_param_pidNavPitchAltitude, // unused
         k_param_pidWheelSteer, // unused
 
+        // Hydrofoil mode parameters
+        k_param_hydrofoil_target_alt_cm,
+        k_param_hydrofoil_min_foiling_speed,
+        k_param_hydrofoil_rear_bias,
+        k_param_hydrofoil_front_floor,
+        k_param_hydrofoil_max_bank,
+        k_param_hydrofoil_alt_stick_range_cm,
+        k_param_hydrofoil_gain_sched_ref_speed,
+        k_param_hydrofoil_throttle_min,
+        k_param_hydrofoil_liftoff_detect_cm,
+
         k_param_mixing_offset,
         k_param_dspoiler_rud_rate,
         k_param_airspeed_stall,
@@ -465,6 +476,17 @@ public:
     AP_Float alt_slope_max_height;
     AP_Int8 rangefinder_landing;
     AP_Int8 flap_slewrate;
+
+    // Hydrofoil mode parameters
+    AP_Int16 hydrofoil_target_alt_cm;
+    AP_Float hydrofoil_min_foiling_speed;
+    AP_Float hydrofoil_rear_bias;
+    AP_Float hydrofoil_front_floor;
+    AP_Float hydrofoil_max_bank;
+    AP_Float hydrofoil_alt_stick_range_cm;
+    AP_Float hydrofoil_gain_sched_ref_speed;
+    AP_Int8  hydrofoil_throttle_min;
+    AP_Int16 hydrofoil_liftoff_detect_cm;
 #if HAL_WITH_IO_MCU
     AP_Int8 override_channel;
 #endif
@@ -593,6 +615,21 @@ public:
 #if AP_PLANE_SYSTEMID_ENABLED
     AP_SystemID systemid;
 #endif
+
+    // Hydrofoil mode parameters
+    AP_Float hydrofoil_K_front;              // Feedforward K constant for front wings
+    AP_Float hydrofoil_K_rear;               // Feedforward K constant for rear wing
+
+    // PID gains
+    AP_Float hydrofoil_pitch_P;
+    AP_Float hydrofoil_pitch_I;
+    AP_Float hydrofoil_pitch_D;
+    AP_Float hydrofoil_alt_P;
+    AP_Float hydrofoil_alt_I;
+    AP_Float hydrofoil_alt_D;
+    AP_Float hydrofoil_roll_P;
+    AP_Float hydrofoil_roll_I;
+    AP_Float hydrofoil_roll_D;
 };
 
 extern const AP_Param::Info var_info[];

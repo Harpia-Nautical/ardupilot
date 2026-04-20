@@ -174,6 +174,7 @@ public:
     friend class ModeTakeoff;
     friend class ModeThermal;
     friend class ModeLoiterAltQLand;
+    friend class ModeHydrofoil;
 #if MODE_AUTOLAND_ENABLED
     friend class ModeAutoLand;
 #endif
@@ -331,6 +332,7 @@ private:
 #if HAL_SOARING_ENABLED
     ModeThermal mode_thermal;
 #endif
+    ModeHydrofoil mode_hydrofoil;
 
 #if AP_QUICKTUNE_ENABLED
     AP_Quicktune quicktune;

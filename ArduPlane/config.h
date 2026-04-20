@@ -223,3 +223,41 @@
 #ifndef THR_CTRL_LAND_THRESH
  #define THR_CTRL_LAND_THRESH 0.7
 #endif
+
+//////////////////////////////////////////////////////////////////////////////
+//  Hydrofoil Mode Defaults
+#ifndef HYDROFOIL_TARGET_ALT_DEFAULT
+ # define HYDROFOIL_TARGET_ALT_DEFAULT      50      // Target altitude in cm
+#endif
+
+#ifndef HYDROFOIL_MIN_FOILING_SPEED_DEFAULT
+ # define HYDROFOIL_MIN_FOILING_SPEED_DEFAULT      6.0f    // Minimum speed in m/s
+#endif
+
+#ifndef HYDROFOIL_REAR_BIAS_DEFAULT
+ # define HYDROFOIL_REAR_BIAS_DEFAULT      0.2f    // Proactive rear bias (normalized)
+#endif
+
+#ifndef HYDROFOIL_FRONT_FLOOR_DEFAULT
+ # define HYDROFOIL_FRONT_FLOOR_DEFAULT      0.1f    // Front wing floor (normalized)
+#endif
+
+#ifndef HYDROFOIL_MAX_BANK_DEFAULT
+ # define HYDROFOIL_MAX_BANK_DEFAULT      20.0f    // Maximum bank angle in degrees
+#endif
+
+#ifndef HYDROFOIL_ALT_STICK_RANGE_DEFAULT
+ # define HYDROFOIL_ALT_STICK_RANGE_DEFAULT      20.0f    // Altitude stick range in cm
+#endif
+
+#ifndef HYDROFOIL_GAIN_SCHED_REF_SPEED_DEFAULT
+ # define HYDROFOIL_GAIN_SCHED_REF_SPEED_DEFAULT      8.0f    // Reference speed for gain scheduling in m/s
+#endif
+
+#ifndef HYDROFOIL_THROTTLE_MIN_DEFAULT
+ # define HYDROFOIL_THROTTLE_MIN_DEFAULT      10    // Minimum throttle percentage
+#endif
+
+#ifndef HYDROFOIL_LIFTOFF_DETECT_DEFAULT
+ # define HYDROFOIL_LIFTOFF_DETECT_DEFAULT      15    // Liftoff detection threshold in cm
+#endif

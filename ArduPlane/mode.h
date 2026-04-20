@@ -70,6 +70,7 @@ public:
 #if MODE_AUTOLAND_ENABLED
         AUTOLAND      = 26,
 #endif
+        HYDROFOIL     = 27,
 
     // Mode number 30 reserved for "offboard" for external/lua control.
     };
@@ -1073,3 +1074,108 @@ protected:
 };
 
 #endif
+
+class ModeHydrofoil : public Mode
+{
+public:
+
+    Mode::Number mode_number() const override { return Mode::Number::HYDROFOIL; }
+    const char *name() const override { return "Hydrofoil"; }
+    const char *name4() const override { return "HFOL"; }
+
+    // methods that affect movement of the vehicle in this mode
+    void update() override;
+
+    void run() override;
+
+    // true if throttle min/max limits should be applied
+    bool use_throttle_limits() const override { return true; }
+
+protected:
+
+    bool _enter() override;
+    void _exit() override;
+    bool _pre_arm_checks(size_t buflen, char *buffer) const override;
+
+private:
+
+    // State machine for hydrofoil control
+    enum class State : uint8_t {
+        IDLE,
+        ACCELERATION_RUN,
+        TRANSITION,
+        FOILING,
+        TOUCHDOWN
+    };
+
+    State current_state;
+    uint32_t state_entry_time_ms;
+
+    // Speed estimation (GPS + IMU fusion)
+    float speed_estimate_ms;          // meters/sec
+    uint32_t last_gps_update_ms;
+    float speed_integrated_since_gps;
+
+    // Rangefinder filtering
+    static const uint8_t MEDIAN_FILTER_SIZE = 5;
+    float rangefinder_buffer[MEDIAN_FILTER_SIZE];
+    uint8_t rangefinder_buffer_idx;
+    float filtered_altitude_cm;
+    uint32_t last_rangefinder_update_ms;
+
+    // PID states
+    float pitch_integrator;
+    float altitude_integrator;
+    float roll_integrator;
+    float last_pitch_error;
+    float last_altitude_error;
+    float last_roll_error;
+
+    // Feedforward outputs
+    float feedforward_front;
+    float feedforward_rear;
+
+    // Control outputs
+    float pitch_pid_out;
+    float altitude_pid_out;
+    float roll_pid_out;
+
+    // RC setpoint modifiers
+    float altitude_offset_cm;
+    float roll_setpoint_deg;
+
+    // State machine methods
+    void update_state_machine();
+    void state_idle();
+    void state_acceleration_run();
+    void state_transition();
+    void state_foiling();
+    void state_touchdown();
+
+    // Speed estimation
+    void update_speed_estimate();
+
+    // Feedforward
+    float get_feedforward_front(float speed_ms);
+    float get_feedforward_rear(float speed_ms);
+
+    // PID controllers
+    float pitch_controller();
+    float altitude_controller();
+    float roll_controller();
+
+    // Gain scheduling
+    float get_gain_scale_factor();
+
+    // Servo mixing and output
+    void mix_and_output_servos();
+
+    // Utility methods
+    float get_filtered_rangefinder_cm();
+    float median_filter(float new_value);
+    bool validate_rangefinder();
+    float get_vertical_velocity_ms();
+
+    // Logging and telemetry
+    void log_data();
+};

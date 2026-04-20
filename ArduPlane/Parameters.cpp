@@ -987,6 +987,76 @@ const AP_Param::Info Plane::var_info[] = {
     GOBJECT(_gcs,           "MAV",  GCS),
 #endif
 
+    // @Param: HFOL_TARGET_ALT
+    // @DisplayName: Hydrofoil target altitude
+    // @Description: Target altitude above water surface when foiling, measured by rangefinder
+    // @Range: 20 150
+    // @Units: cm
+    // @User: Standard
+    GSCALAR(hydrofoil_target_alt_cm, "HFOL_TARGET_ALT", 50),
+
+    // @Param: HFOL_MIN_SPEED
+    // @DisplayName: Hydrofoil minimum foiling speed
+    // @Description: Minimum speed required to sustain foiling flight
+    // @Range: 3 15
+    // @Units: m/s
+    // @User: Standard
+    GSCALAR(hydrofoil_min_foiling_speed, "HFOL_MIN_SPEED", 6.0),
+
+    // @Param: HFOL_REAR_BIAS
+    // @DisplayName: Hydrofoil rear wing proactive bias
+    // @Description: Proactive bias applied to rear wing during acceleration run to counteract nosedive tendency (normalized control output)
+    // @Range: 0 1
+    // @User: Standard
+    GSCALAR(hydrofoil_rear_bias, "HFOL_REAR_BIAS", 0.2),
+
+    // @Param: HFOL_FRONT_FLOOR
+    // @DisplayName: Hydrofoil front wing floor
+    // @Description: Minimum front wing deflection during acceleration run to unload bow (normalized control output)
+    // @Range: 0 1
+    // @User: Standard
+    GSCALAR(hydrofoil_front_floor, "HFOL_FRONT_FLOOR", 0.1),
+
+    // @Param: HFOL_MAX_BANK
+    // @DisplayName: Hydrofoil maximum bank angle
+    // @Description: Maximum bank angle for turns in foiling mode
+    // @Range: 5 45
+    // @Units: deg
+    // @User: Standard
+    GSCALAR(hydrofoil_max_bank, "HFOL_MAX_BANK", 20.0),
+
+    // @Param: HFOL_ALT_STICK
+    // @DisplayName: Hydrofoil altitude stick range
+    // @Description: Range of altitude adjustment from pitch stick input
+    // @Range: 0 50
+    // @Units: cm
+    // @User: Standard
+    GSCALAR(hydrofoil_alt_stick_range_cm, "HFOL_ALT_STICK", 20.0),
+
+    // @Param: HFOL_GAIN_REF_SPD
+    // @DisplayName: Hydrofoil gain scheduling reference speed
+    // @Description: Reference speed for PID gain scheduling. PIDs are tuned at this speed.
+    // @Range: 5 15
+    // @Units: m/s
+    // @User: Advanced
+    GSCALAR(hydrofoil_gain_sched_ref_speed, "HFOL_GAIN_REF_SPD", 8.0),
+
+    // @Param: HFOL_THR_MIN
+    // @DisplayName: Hydrofoil minimum throttle
+    // @Description: Minimum throttle percentage to trigger acceleration run state
+    // @Range: 0 50
+    // @Units: %
+    // @User: Standard
+    GSCALAR(hydrofoil_throttle_min, "HFOL_THR_MIN", 10),
+
+    // @Param: HFOL_LIFTOFF_CM
+    // @DisplayName: Hydrofoil liftoff detection threshold
+    // @Description: Rangefinder altitude threshold to detect liftoff from water
+    // @Range: 5 50
+    // @Units: cm
+    // @User: Advanced
+    GSCALAR(hydrofoil_liftoff_detect_cm, "HFOL_LIFTOFF_CM", 15),
+
     AP_VAREND
 };
 
@@ -1289,6 +1359,83 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Standard
     AP_GROUPINFO("RNGFND_LND_DIST", 41, ParametersG2, rangefinder_land_engage_dist_m, 0),
 #endif
+
+    // @Param: HFOL_K_FRONT
+    // @DisplayName: Hydrofoil feedforward K constant for front wings
+    // @Description: Empirically determined K constant for front wing feedforward curve (AoA = K/v²). Characterize by recording equilibrium servo positions at multiple speeds.
+    // @Range: 10 200
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_K_FRONT", 42, ParametersG2, hydrofoil_K_front, 80.0),
+
+    // @Param: HFOL_K_REAR
+    // @DisplayName: Hydrofoil feedforward K constant for rear wing
+    // @Description: Empirically determined K constant for rear wing feedforward curve (AoA = K/v²). Characterize by recording equilibrium servo positions at multiple speeds.
+    // @Range: 10 200
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_K_REAR", 43, ParametersG2, hydrofoil_K_rear, 40.0),
+
+    // @Param: HFOL_PITCH_P
+    // @DisplayName: Hydrofoil pitch P gain
+    // @Description: P gain for pitch controller (rear wing)
+    // @Range: 0 1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_PITCH_P", 44, ParametersG2, hydrofoil_pitch_P, 0.133),
+
+    // @Param: HFOL_PITCH_I
+    // @DisplayName: Hydrofoil pitch I gain
+    // @Description: I gain for pitch controller (rear wing)
+    // @Range: 0 0.2
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_PITCH_I", 45, ParametersG2, hydrofoil_pitch_I, 0.033),
+
+    // @Param: HFOL_PITCH_D
+    // @DisplayName: Hydrofoil pitch D gain
+    // @Description: D gain for pitch controller (rear wing)
+    // @Range: 0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_PITCH_D", 46, ParametersG2, hydrofoil_pitch_D, 0.02),
+
+    // @Param: HFOL_ALT_P
+    // @DisplayName: Hydrofoil altitude P gain
+    // @Description: P gain for altitude controller (front wings collective)
+    // @Range: 0 1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ALT_P", 47, ParametersG2, hydrofoil_alt_P, 0.15),
+
+    // @Param: HFOL_ALT_I
+    // @DisplayName: Hydrofoil altitude I gain
+    // @Description: I gain for altitude controller (front wings collective)
+    // @Range: 0 0.2
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ALT_I", 48, ParametersG2, hydrofoil_alt_I, 0.03),
+
+    // @Param: HFOL_ALT_D
+    // @DisplayName: Hydrofoil altitude D gain
+    // @Description: D gain for altitude controller (front wings collective)
+    // @Range: 0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ALT_D", 49, ParametersG2, hydrofoil_alt_D, 0.02),
+
+    // @Param: HFOL_ROLL_P
+    // @DisplayName: Hydrofoil roll P gain
+    // @Description: P gain for roll controller (front wings differential)
+    // @Range: 0 1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ROLL_P", 50, ParametersG2, hydrofoil_roll_P, 0.25),
+
+    // @Param: HFOL_ROLL_I
+    // @DisplayName: Hydrofoil roll I gain
+    // @Description: I gain for roll controller (front wings differential)
+    // @Range: 0 0.2
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ROLL_I", 51, ParametersG2, hydrofoil_roll_I, 0.04),
+
+    // @Param: HFOL_ROLL_D
+    // @DisplayName: Hydrofoil roll D gain
+    // @Description: D gain for roll controller (front wings differential)
+    // @Range: 0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_ROLL_D", 52, ParametersG2, hydrofoil_roll_D, 0.01),
 
     AP_GROUPEND
 };
