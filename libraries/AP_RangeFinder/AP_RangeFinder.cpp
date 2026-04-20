@@ -21,6 +21,7 @@
 #include "AP_RangeFinder_PulsedLightLRF.h"
 #include "AP_RangeFinder_MaxsonarI2CXL.h"
 #include "AP_RangeFinder_MaxsonarSerialLV.h"
+#include "AP_RangeFinder_MaxBotixSerial.h"
 #include "AP_RangeFinder_BBB_PRU.h"
 #include "AP_RangeFinder_LightWareI2C.h"
 #include "AP_RangeFinder_LightWareSerial.h"
@@ -449,6 +450,9 @@ __INITFUNC__ void RangeFinder::detect_instance(uint8_t instance, uint8_t& serial
 #if AP_RANGEFINDER_MAXBOTIX_SERIAL_ENABLED
     case Type::MBSER:
         serial_create_fn = AP_RangeFinder_MaxsonarSerialLV::create;
+        break;
+    case Type::MaxBotixSerial:
+        serial_create_fn = AP_RangeFinder_MaxBotixSerial::create;
         break;
 #endif
 #if AP_RANGEFINDER_ANALOG_ENABLED
