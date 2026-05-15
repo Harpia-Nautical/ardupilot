@@ -261,3 +261,11 @@
 #ifndef HYDROFOIL_LIFTOFF_DETECT_DEFAULT
  # define HYDROFOIL_LIFTOFF_DETECT_DEFAULT      15    // Liftoff detection threshold in cm
 #endif
+
+#ifndef HYDROFOIL_TARGET_SPEED_DEFAULT
+ # define HYDROFOIL_TARGET_SPEED_DEFAULT      8.0f    // Target speed for throttle controller in m/s
+#endif
+
+#ifndef HYDROFOIL_CTRL_ENABLE_DEFAULT
+ # define HYDROFOIL_CTRL_ENABLE_DEFAULT      15    // All controllers enabled by default (0b1111)
+#endif

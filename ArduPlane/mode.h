@@ -1079,6 +1079,8 @@ class ModeHydrofoil : public Mode
 {
 public:
 
+    ModeHydrofoil();
+
     Mode::Number mode_number() const override { return Mode::Number::HYDROFOIL; }
     const char *name() const override { return "Hydrofoil"; }
     const char *name4() const override { return "HFOL"; }
@@ -1127,9 +1129,11 @@ private:
     float pitch_integrator;
     float altitude_integrator;
     float roll_integrator;
+    float speed_integrator;
     float last_pitch_error;
     float last_altitude_error;
     float last_roll_error;
+    float last_speed_error;
 
     // Feedforward outputs
     float feedforward_front;
@@ -1139,10 +1143,12 @@ private:
     float pitch_pid_out;
     float altitude_pid_out;
     float roll_pid_out;
+    float speed_pid_out;
 
     // RC setpoint modifiers
     float altitude_offset_cm;
     float roll_setpoint_deg;
+    float speed_setpoint_ms;
 
     // State machine methods
     void update_state_machine();
@@ -1163,6 +1169,7 @@ private:
     float pitch_controller();
     float altitude_controller();
     float roll_controller();
+    float speed_controller();
 
     // Gain scheduling
     float get_gain_scale_factor();

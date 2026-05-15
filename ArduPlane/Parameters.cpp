@@ -475,7 +475,7 @@ const AP_Param::Info Plane::var_info[] = {
     // @Param: FLTMODE1
     // @DisplayName: FlightMode1
     // @Description: Flight mode for switch position 1 (910 to 1230 and above 2049)
-    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,3:TRAINING,4:ACRO,5:FBWA,6:FBWB,7:CRUISE,8:AUTOTUNE,10:Auto,11:RTL,12:Loiter,13:TAKEOFF,14:AVOID_ADSB,15:Guided,17:QSTABILIZE,18:QHOVER,19:QLOITER,20:QLAND,21:QRTL,22:QAUTOTUNE,23:QACRO,24:THERMAL,25:Loiter to QLand,26:AUTOLAND
+    // @Values: 0:Manual,1:CIRCLE,2:STABILIZE,3:TRAINING,4:ACRO,5:FBWA,6:FBWB,7:CRUISE,8:AUTOTUNE,10:Auto,11:RTL,12:Loiter,13:TAKEOFF,14:AVOID_ADSB,15:Guided,17:QSTABILIZE,18:QHOVER,19:QLOITER,20:QLAND,21:QRTL,22:QAUTOTUNE,23:QACRO,24:THERMAL,25:Loiter to QLand,26:AUTOLAND,27:HYDROFOIL
     // @User: Standard
     GARRAY(flight_modes, 0,         "FLTMODE1",       FLIGHT_MODE_1),
 
@@ -1057,6 +1057,21 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Advanced
     GSCALAR(hydrofoil_liftoff_detect_cm, "HFOL_LIFTOFF_CM", 15),
 
+    // @Param: HFOL_TARGET_SPD
+    // @DisplayName: Hydrofoil target speed
+    // @Description: Target speed for throttle controller during foiling. Speed controller will adjust throttle to maintain this speed.
+    // @Range: 4 20
+    // @Units: m/s
+    // @User: Standard
+    GSCALAR(hydrofoil_target_speed, "HFOL_TARGET_SPD", 8.0),
+
+    // @Param: HFOL_CTRL_EN
+    // @DisplayName: Hydrofoil controller enable
+    // @Description: Bitmask to enable/disable individual control loops for tuning. When disabled, control falls back to manual RC input. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed
+    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed
+    // @User: Advanced
+    GSCALAR(hydrofoil_ctrl_enable, "HFOL_CTRL_EN", 15),
+
     AP_VAREND
 };
 
@@ -1436,6 +1451,27 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Range: 0 0.5
     // @User: Advanced
     AP_GROUPINFO("HFOL_ROLL_D", 52, ParametersG2, hydrofoil_roll_D, 0.01),
+
+    // @Param: HFOL_SPEED_P
+    // @DisplayName: Hydrofoil speed P gain
+    // @Description: P gain for speed controller (throttle)
+    // @Range: 0 1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_SPEED_P", 53, ParametersG2, hydrofoil_speed_P, 0.2),
+
+    // @Param: HFOL_SPEED_I
+    // @DisplayName: Hydrofoil speed I gain
+    // @Description: I gain for speed controller (throttle)
+    // @Range: 0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_SPEED_I", 54, ParametersG2, hydrofoil_speed_I, 0.05),
+
+    // @Param: HFOL_SPEED_D
+    // @DisplayName: Hydrofoil speed D gain
+    // @Description: D gain for speed controller (throttle)
+    // @Range: 0 0.5
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_SPEED_D", 55, ParametersG2, hydrofoil_speed_D, 0.01),
 
     AP_GROUPEND
 };

@@ -346,17 +346,6 @@ public:
         k_param_pidNavPitchAltitude, // unused
         k_param_pidWheelSteer, // unused
 
-        // Hydrofoil mode parameters
-        k_param_hydrofoil_target_alt_cm,
-        k_param_hydrofoil_min_foiling_speed,
-        k_param_hydrofoil_rear_bias,
-        k_param_hydrofoil_front_floor,
-        k_param_hydrofoil_max_bank,
-        k_param_hydrofoil_alt_stick_range_cm,
-        k_param_hydrofoil_gain_sched_ref_speed,
-        k_param_hydrofoil_throttle_min,
-        k_param_hydrofoil_liftoff_detect_cm,
-
         k_param_mixing_offset,
         k_param_dspoiler_rud_rate,
         k_param_airspeed_stall,
@@ -381,6 +370,19 @@ public:
         k_param_quicktune,
         k_param_mode_autoland,
         k_param__gcs,
+
+        // Hydrofoil mode parameters (274-284)
+        k_param_hydrofoil_target_alt_cm = 274,
+        k_param_hydrofoil_min_foiling_speed,
+        k_param_hydrofoil_rear_bias,
+        k_param_hydrofoil_front_floor,
+        k_param_hydrofoil_max_bank,
+        k_param_hydrofoil_alt_stick_range_cm,
+        k_param_hydrofoil_gain_sched_ref_speed,
+        k_param_hydrofoil_throttle_min,
+        k_param_hydrofoil_liftoff_detect_cm,
+        k_param_hydrofoil_target_speed,
+        k_param_hydrofoil_ctrl_enable,
 
     };
 
@@ -487,6 +489,8 @@ public:
     AP_Float hydrofoil_gain_sched_ref_speed;
     AP_Int8  hydrofoil_throttle_min;
     AP_Int16 hydrofoil_liftoff_detect_cm;
+    AP_Float hydrofoil_target_speed;
+    AP_Int8  hydrofoil_ctrl_enable;
 #if HAL_WITH_IO_MCU
     AP_Int8 override_channel;
 #endif
@@ -630,6 +634,9 @@ public:
     AP_Float hydrofoil_roll_P;
     AP_Float hydrofoil_roll_I;
     AP_Float hydrofoil_roll_D;
+    AP_Float hydrofoil_speed_P;
+    AP_Float hydrofoil_speed_I;
+    AP_Float hydrofoil_speed_D;
 };
 
 extern const AP_Param::Info var_info[];

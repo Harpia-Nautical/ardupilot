@@ -1,0 +1,114 @@
+# Hydrofoil SITL Configuration
+# Servo 1: Front Left Wing (1000=negative max AoA, 1500=neutral, 2000=positive max AoA)
+# Servo 2: Front Right Wing (same as servo 1)
+# Servo 3: Rear Wing (same as servos 1&2)
+# Servo 4: Throttle
+
+# Servo Output Functions
+SERVO1_FUNCTION 0      # Manual/Custom control (will be controlled by mode)
+SERVO2_FUNCTION 0      # Manual/Custom control
+SERVO3_FUNCTION 0      # Manual/Custom control
+SERVO4_FUNCTION 70     # Throttle
+
+# Servo PWM ranges (1000-2000, neutral at 1500)
+SERVO1_MIN 1000
+SERVO1_MAX 2000
+SERVO1_TRIM 1500
+
+SERVO2_MIN 1000
+SERVO2_MAX 2000
+SERVO2_TRIM 1500
+
+SERVO3_MIN 1000
+SERVO3_MAX 2000
+SERVO3_TRIM 1500
+
+SERVO4_MIN 1000
+SERVO4_MAX 2000
+SERVO4_TRIM 1000      # Throttle idle at min
+
+# Servo reversed flags (set to 0 for normal, 1 for reversed if needed)
+SERVO1_REVERSED 0
+SERVO2_REVERSED 0
+SERVO3_REVERSED 0
+SERVO4_REVERSED 0
+
+# Rangefinder Configuration (Required for hydrofoil mode)
+RNGFND1_TYPE 1         # Analog rangefinder for SITL (will provide simulated data)
+RNGFND1_ORIENT 25      # Down-facing (ROTATION_PITCH_270)
+RNGFND1_MIN_CM 10      # 10cm minimum range
+RNGFND1_MAX_CM 1000    # 10m maximum range
+RNGFND1_SCALING 10     # Scaling factor
+RNGFND1_PIN 0          # Analog pin (SITL will simulate)
+
+# Hydrofoil Mode Parameters
+HFOL_TARGET_ALT 50     # 50cm target altitude above water
+HFOL_MIN_SPEED 6.0     # 6 m/s minimum foiling speed
+HFOL_REAR_BIAS 0.2     # Rear wing proactive bias (normalized)
+HFOL_FRONT_FLOOR 0.1   # Front wing floor (normalized)
+HFOL_MAX_BANK 20.0     # 20 degree max bank angle
+HFOL_ALT_STICK 20.0    # 20cm altitude adjustment range
+HFOL_GAIN_REF_SPD 8.0  # 8 m/s reference speed for gain scheduling
+HFOL_THR_MIN 10        # 10% minimum throttle to trigger acceleration
+HFOL_LIFTOFF_CM 15     # 15cm liftoff detection threshold
+
+# Hydrofoil PID Gains (G2 parameters)
+HFOL_K_FRONT 80.0      # Front wing feedforward K constant
+HFOL_K_REAR 40.0       # Rear wing feedforward K constant
+
+HFOL_PITCH_P 0.133     # Pitch P gain (normalized)
+HFOL_PITCH_I 0.033     # Pitch I gain
+HFOL_PITCH_D 0.02      # Pitch D gain
+
+HFOL_ALT_P 0.15        # Altitude P gain (normalized)
+HFOL_ALT_I 0.03        # Altitude I gain
+HFOL_ALT_D 0.02        # Altitude D gain
+
+HFOL_ROLL_P 0.25       # Roll P gain (normalized)
+HFOL_ROLL_I 0.04       # Roll I gain
+HFOL_ROLL_D 0.01       # Roll D gain
+
+# Flight Mode Configuration
+FLTMODE_CH 5           # Use channel 5 for mode switching
+FLTMODE1 27            # HYDROFOIL mode
+FLTMODE2 5             # FBWA (fallback)
+FLTMODE3 11            # RTL (fallback)
+FLTMODE4 2             # STABILIZE (fallback)
+FLTMODE5 0             # MANUAL (fallback)
+FLTMODE6 10            # AUTO (fallback)
+
+# GPS and Navigation
+SIM_GPS_TYPE 1         # Simulated GPS
+GPS_TYPE 1             # AUTO GPS
+AHRS_EKF_TYPE 3        # Use EKF3
+
+# Airspeed (disable for water surface operation)
+ARSPD_TYPE 0           # No airspeed sensor
+ARSPD_USE 0            # Don't use airspeed
+
+# Basic stabilization gains (for when not in hydrofoil mode)
+PTCH2SRV_P 0.5
+PTCH2SRV_I 0.1
+PTCH2SRV_D 0.02
+
+RLL2SRV_P 0.5
+RLL2SRV_I 0.1
+RLL2SRV_D 0.02
+
+# Throttle settings
+THR_MIN 0              # 0% minimum throttle
+THR_MAX 100            # 100% maximum throttle
+TRIM_THROTTLE 50       # 50% cruise throttle
+THROTTLE_NUDGE 1       # Enable throttle nudge
+
+# Simulation specific
+SIM_SPEEDUP 1          # Real-time simulation
+SIM_BARO_DRIFT 0       # No barometer drift
+SIM_WIND_SPD 0         # No wind initially
+
+# Logging
+LOG_BITMASK 65535      # Log everything for debugging
+
+# Safety and arming
+ARMING_CHECK 1         # Enable most arming checks (disable ARMING_CHECK if needed for testing)
+BRD_SAFETYENABLE 0     # Disable hardware safety switch for SITL
