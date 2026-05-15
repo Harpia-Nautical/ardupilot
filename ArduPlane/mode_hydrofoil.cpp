@@ -674,7 +674,12 @@ float ModeHydrofoil::get_filtered_rangefinder_cm()
 
     // Check if rangefinder has new data
     if (plane.rangefinder.status_orient(ROTATION_PITCH_270) == RangeFinder::Status::Good) {
-        const float reading_cm = plane.rangefinder.distance_orient(ROTATION_PITCH_270) * 100.0f;
+        // Get raw rangefinder distance
+        const float raw_distance_cm = plane.rangefinder.distance_orient(ROTATION_PITCH_270) * 100.0f;
+
+        // Subtract sensor ground clearance to get actual altitude above surface
+        const float ground_clearance_cm = plane.rangefinder.ground_clearance_orient(ROTATION_PITCH_270) * 100.0f;
+        const float reading_cm = raw_distance_cm - ground_clearance_cm;
 
         // Apply median filter
         filtered_altitude_cm = median_filter(reading_cm);
