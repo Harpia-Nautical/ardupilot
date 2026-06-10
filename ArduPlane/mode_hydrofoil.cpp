@@ -42,11 +42,11 @@ bool ModeHydrofoil::_enter()
         return false;
     }
 
-    // Validate GPS is available for speed
-    if (plane.gps.status() < AP_GPS_FixType::FIX_3D) {
-        gcs().send_text(MAV_SEVERITY_WARNING, "Hydrofoil: GPS required");
-        return false;
-    }
+    // GPS not required - speed estimation will use GPS when available, IMU otherwise
+    // if (plane.gps.status() < AP_GPS_FixType::FIX_3D) {
+    //     gcs().send_text(MAV_SEVERITY_WARNING, "Hydrofoil: GPS required");
+    //     return false;
+    // }
 
     // Initialize state machine
     current_state = State::IDLE;
@@ -113,11 +113,11 @@ bool ModeHydrofoil::_pre_arm_checks(size_t buflen, char *buffer) const
         return false;
     }
 
-    // Check GPS
-    if (plane.gps.status() < AP_GPS_FixType::FIX_3D) {
-        hal.util->snprintf(buffer, buflen, "Hydrofoil: GPS fix required");
-        return false;
-    }
+    // GPS not required - speed estimation will use GPS when available
+    // if (plane.gps.status() < AP_GPS_FixType::FIX_3D) {
+    //     hal.util->snprintf(buffer, buflen, "Hydrofoil: GPS fix required");
+    //     return false;
+    // }
 
     // Check IMU calibration
     if (!plane.ahrs.healthy()) {
@@ -143,13 +143,34 @@ void ModeHydrofoil::update()
     // Update rangefinder filtering
     get_filtered_rangefinder_cm();
 
-    // Debug telemetry: log rangefinder altitude every 5 seconds
+    // Debug telemetry: log all PID values every 1 second
     const uint32_t now_ms = AP_HAL::millis();
     static uint32_t last_debug_log_ms = 0;
-    if (now_ms - last_debug_log_ms > 5000) {
+    if (now_ms - last_debug_log_ms > 1000) {
         last_debug_log_ms = now_ms;
-        gcs().send_text(MAV_SEVERITY_INFO, "HFOL: Alt=%.1fcm Speed=%.1fm/s State=%d",
-                        filtered_altitude_cm, speed_estimate_ms, (int)current_state);
+        gcs().send_text(MAV_SEVERITY_INFO, "HFOL: Alt=%.1fcm Spd=%.1fm/s St=%d CtrlEn=%d",
+                        filtered_altitude_cm, speed_estimate_ms, (int)current_state,
+                        (int)plane.g.hydrofoil_ctrl_enable.get());
+        gcs().send_text(MAV_SEVERITY_INFO, "PITCH: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                        (double)plane.g2.hydrofoil_pitch_P.get(),
+                        (double)plane.g2.hydrofoil_pitch_I.get(),
+                        (double)plane.g2.hydrofoil_pitch_D.get(),
+                        (double)pitch_pid_out);
+        gcs().send_text(MAV_SEVERITY_INFO, "ALT: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                        (double)plane.g2.hydrofoil_alt_P.get(),
+                        (double)plane.g2.hydrofoil_alt_I.get(),
+                        (double)plane.g2.hydrofoil_alt_D.get(),
+                        (double)altitude_pid_out);
+        gcs().send_text(MAV_SEVERITY_INFO, "ROLL: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                        (double)plane.g2.hydrofoil_roll_P.get(),
+                        (double)plane.g2.hydrofoil_roll_I.get(),
+                        (double)plane.g2.hydrofoil_roll_D.get(),
+                        (double)roll_pid_out);
+        gcs().send_text(MAV_SEVERITY_INFO, "SPEED: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                        (double)plane.g2.hydrofoil_speed_P.get(),
+                        (double)plane.g2.hydrofoil_speed_I.get(),
+                        (double)plane.g2.hydrofoil_speed_D.get(),
+                        (double)speed_pid_out);
     }
 
     // Run state machine
@@ -179,6 +200,11 @@ void ModeHydrofoil::update_state_machine()
 
     State new_state = current_state;
 
+    if (throttle < plane.g.hydrofoil_throttle_min * 0.5f) {
+        new_state = State::IDLE;
+        gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: IDLE");
+    }
+
     switch (current_state) {
         case State::IDLE:
             state_idle();
@@ -196,11 +222,6 @@ void ModeHydrofoil::update_state_machine()
                 altitude_cm > plane.g.hydrofoil_liftoff_detect_cm) {
                 new_state = State::TRANSITION;
                 gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: TRANSITION");
-            }
-            // Fall back to IDLE if throttle cut
-            if (throttle < plane.g.hydrofoil_throttle_min * 0.5f) {
-                new_state = State::IDLE;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: IDLE");
             }
             break;
 
@@ -275,6 +296,9 @@ void ModeHydrofoil::state_idle()
     pitch_pid_out = 0.0f;
     altitude_pid_out = 0.0f;
     roll_pid_out = 0.0f;
+
+    // Throttle passthrough
+    speed_pid_out = 0;
 }
 
 void ModeHydrofoil::state_acceleration_run()
@@ -293,7 +317,10 @@ void ModeHydrofoil::state_acceleration_run()
     roll_pid_out = roll_controller();
 
     // Altitude loop inactive during acceleration run
-    altitude_pid_out = 0.0f;
+    altitude_pid_out = altitude_controller();
+
+    // Throttle control (manual passthrough or PID)
+    speed_pid_out = speed_controller();
 }
 
 void ModeHydrofoil::state_transition()
@@ -310,11 +337,15 @@ void ModeHydrofoil::state_transition()
     // All PIDs active with aggressive gains
     pitch_pid_out = pitch_controller();
     altitude_pid_out = altitude_controller();
-    roll_setpoint_deg = 0.0f;  // Still holding 0° in transition
+    const float roll_input = plane.channel_roll->norm_input();
+    roll_setpoint_deg = (roll_input) * plane.g.hydrofoil_max_bank / 2;
     roll_pid_out = roll_controller();
 
     // Apply fading bias to rear
     feedforward_rear += proactive_bias;
+
+    // Throttle control (manual passthrough or PID)
+    speed_pid_out = speed_controller();
 }
 
 void ModeHydrofoil::state_foiling()
@@ -328,13 +359,13 @@ void ModeHydrofoil::state_foiling()
     altitude_pid_out = altitude_controller();
 
     // Roll follows pilot input
-    const float roll_input = plane.channel_roll->get_control_in();
-    roll_setpoint_deg = (roll_input / 4500.0f) * plane.g.hydrofoil_max_bank;
+    const float roll_input = plane.channel_roll->norm_input();
+    roll_setpoint_deg = (roll_input) * plane.g.hydrofoil_max_bank;
     roll_pid_out = roll_controller();
 
     // Pitch stick modifies altitude target
-    const float pitch_input = plane.channel_pitch->get_control_in();
-    altitude_offset_cm = (pitch_input / 4500.0f) * plane.g.hydrofoil_alt_stick_range_cm;
+    const float pitch_input = plane.channel_pitch->norm_input();
+    altitude_offset_cm = (pitch_input) * plane.g.hydrofoil_alt_stick_range_cm;
 
     // Speed controller for throttle
     speed_setpoint_ms = plane.g.hydrofoil_target_speed;  // Could add throttle stick offset here
@@ -359,6 +390,9 @@ void ModeHydrofoil::state_touchdown()
 
     // Altitude loop inactive - we want to descend
     altitude_pid_out = 0.0f;
+
+    // Throttle control (manual passthrough or PID)
+    speed_pid_out = speed_controller();
 }
 
 // ============================================================================
@@ -432,9 +466,7 @@ float ModeHydrofoil::pitch_controller()
 {
     // Check if pitch controller is enabled (bit 0)
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 1)) {
-        // Disabled: return manual pitch stick input (normalized -1 to +1)
-        const float pitch_input = plane.channel_pitch->get_control_in() / 4500.0f;
-        return pitch_input;
+        return plane.pitch_in_expo(false) / 4500.0f;
     }
 
     // Target: 0° hull pitch at all times
@@ -471,17 +503,11 @@ float ModeHydrofoil::pitch_controller()
 
 float ModeHydrofoil::altitude_controller()
 {
-    // Only active in TRANSITION and FOILING
-    if (current_state != State::TRANSITION && current_state != State::FOILING) {
-        return 0.0f;
-    }
-
     // Check if altitude controller is enabled (bit 1)
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 2)) {
         // Disabled: return manual pitch stick input (normalized -1 to +1)
         // Pitch stick controls front wing collective when altitude PID is off
-        const float pitch_input = plane.channel_pitch->get_control_in() / 4500.0f;
-        return pitch_input;
+        return plane.pitch_in_expo(false)  / 4500.0f;
     }
 
     // Target altitude with RC offset
@@ -522,8 +548,7 @@ float ModeHydrofoil::roll_controller()
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 4)) {
         // Disabled: return manual roll stick input (normalized -1 to +1)
         // Roll stick controls front wing differential when roll PID is off
-        const float roll_input = plane.channel_roll->get_control_in() / 4500.0f;
-        return roll_input;
+        return plane.roll_in_expo(false) / 4500.0f;
     }
 
     // Target roll angle
@@ -560,21 +585,16 @@ float ModeHydrofoil::roll_controller()
 
 float ModeHydrofoil::speed_controller()
 {
-    // Only active in FOILING state
-    if (current_state != State::FOILING) {
-        return 0.0f;
-    }
-
     // Check if speed controller is enabled (bit 3)
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 8)) {
         // Disabled: return manual throttle input (percentage 0-100)
-        return plane.get_throttle_input(true);
+        return plane.get_throttle_input(true) / 100.0f;
     }
 
     // Target speed with potential RC offset
     const float target_speed_ms = speed_setpoint_ms;
     const float current_speed_ms = speed_estimate_ms;
-    const float speed_error = target_speed_ms - current_speed_ms;
+    const float speed_error = (target_speed_ms - current_speed_ms) / 100;
 
     // Get forward acceleration from IMU
     const Vector3f accel = plane.ahrs.get_accel();
@@ -588,9 +608,13 @@ float ModeHydrofoil::speed_controller()
     const float P = plane.g2.hydrofoil_speed_P * gain_scale;
     const float I = plane.g2.hydrofoil_speed_I * gain_scale;
     const float D = plane.g2.hydrofoil_speed_D * gain_scale;
+    const float FF = plane.g2.hydrofoil_speed_FF;
+
+    // Feedforward: baseline throttle proportional to target speed
+    float output = FF * target_speed_ms;
 
     // P term
-    float output = P * speed_error;
+    output += P * speed_error;
 
     // I term with anti-windup
     speed_integrator += I * speed_error * dt;
@@ -646,22 +670,35 @@ void ModeHydrofoil::mix_and_output_servos()
 
     // Output to servos
     // Front left = aileron left, front right = aileron right, rear = elevator
-    SRV_Channels::set_output_scaled(SRV_Channel::k_aileron, left_servo);
-    SRV_Channels::set_output_scaled(SRV_Channel::k_elevator, rear_servo);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_scripting1, left_servo);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_scripting3, right_servo);
+    SRV_Channels::set_output_scaled(SRV_Channel::k_scripting2, rear_servo);
+  
+    SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, speed_pid_out * 100.0f);
+}
 
-    // Set right aileron separately if available
-    SRV_Channels::set_output_scaled(SRV_Channel::k_dspoilerRight1, right_servo);
+// ============================================================================
+// SERVO CONVERSION
+// ============================================================================
 
-    // Throttle output
-    float throttle;
-    if (current_state == State::FOILING) {
-        // Use speed PID controller in foiling state
-        throttle = speed_pid_out;
+// Convert wing AoA (degrees) to scaled servo output
+// Accounts for asymmetric servo range: -2.4° to +11.8°
+// Servo trim at 1318 PWM = 0° AoA
+int16_t ModeHydrofoil::aoa_to_servo_scaled(float aoa_deg)
+{
+    // Wing servo range (from linkage geometry):
+    // Positive: 0° to +11.8° maps to 0 to +4500 scaled
+    // Negative: 0° to -2.4° maps to 0 to -4500 scaled
+
+    if (aoa_deg >= 0.0f) {
+        // Positive range: 0 to +11.8 degrees
+        const float scale = 4500.0f / 11.8f;  // 381.4 per degree
+        return constrain_int16(aoa_deg * scale, 0, 4500);
     } else {
-        // Direct passthrough in other states
-        throttle = plane.get_throttle_input(true);
+        // Negative range: 0 to -2.4 degrees
+        const float scale = 4500.0f / 2.4f;   // 1875 per degree
+        return constrain_int16(aoa_deg * scale, -4500, 0);
     }
-    SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, throttle);
 }
 
 // ============================================================================

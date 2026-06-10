@@ -637,6 +637,7 @@ public:
     AP_Float hydrofoil_speed_P;
     AP_Float hydrofoil_speed_I;
     AP_Float hydrofoil_speed_D;
+    AP_Float hydrofoil_speed_FF;
 };
 
 extern const AP_Param::Info var_info[];

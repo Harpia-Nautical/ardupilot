@@ -1176,6 +1176,7 @@ private:
 
     // Servo mixing and output
     void mix_and_output_servos();
+    int16_t aoa_to_servo_scaled(float aoa_deg);
 
     // Utility methods
     float get_filtered_rangefinder_cm();

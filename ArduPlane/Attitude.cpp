@@ -101,6 +101,11 @@ bool Plane::stick_mixing_enabled(void)
         return false;
     }
 #endif
+
+    if (control_mode == &mode_hydrofoil) {
+        return false;
+    }
+
     if (control_mode->does_auto_throttle() && plane.control_mode->does_auto_navigation()) {
         // we're in an auto mode. Check the stick mixing flag
         if (g.stick_mixing != StickMixing::NONE &&
@@ -315,6 +320,7 @@ void Plane::stabilize_stick_mixing_fbw()
 #endif
         !quadplane.allow_stick_mixing() ||
 #endif  // HAL_QUADPLANE_ENABLED
+        control_mode == &mode_hydrofoil ||
         control_mode == &mode_training) {
         return;
     }

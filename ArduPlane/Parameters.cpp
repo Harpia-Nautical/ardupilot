@@ -1473,6 +1473,13 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @User: Advanced
     AP_GROUPINFO("HFOL_SPEED_D", 55, ParametersG2, hydrofoil_speed_D, 0.01),
 
+    // @Param: HFOL_SPEED_FF
+    // @DisplayName: Hydrofoil speed feedforward
+    // @Description: Feedforward gain for speed controller. Throttle = FF * target_speed. Provides baseline throttle proportional to target speed.
+    // @Range: 0 0.2
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_SPEED_FF", 56, ParametersG2, hydrofoil_speed_FF, 0.086),
+
     AP_GROUPEND
 };
 
