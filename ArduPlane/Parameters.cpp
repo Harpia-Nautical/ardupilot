@@ -1072,6 +1072,37 @@ const AP_Param::Info Plane::var_info[] = {
     // @User: Advanced
     GSCALAR(hydrofoil_ctrl_enable, "HFOL_CTRL_EN", 15),
 
+    // @Param: HFOL_DEBUG_MASK
+    // @DisplayName: Hydrofoil debug message mask
+    // @Description: Bitmask to select which debug telemetry messages to send. Reduces GCS spam during tuning. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed, Bit 4: State/General
+    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed, 4:State
+    // @User: Advanced
+    GSCALAR(hydrofoil_debug_mask, "HFOL_DEBUG_MASK", 31),
+
+    // @Param: HFOL_TRIM_FL
+    // @DisplayName: Hydrofoil front left wing trim
+    // @Description: Mechanical trim offset for front left wing in normalized units (-1 to 1). Applied after all calculations to compensate for misalignment. Does not affect servo scaling.
+    // @Range: -1 1
+    // @Increment: 0.01
+    // @User: Standard
+    GSCALAR(hydrofoil_trim_front_left, "HFOL_TRIM_FL", 0),
+
+    // @Param: HFOL_TRIM_FR
+    // @DisplayName: Hydrofoil front right wing trim
+    // @Description: Mechanical trim offset for front right wing in normalized units (-1 to 1). Applied after all calculations to compensate for misalignment. Does not affect servo scaling.
+    // @Range: -1 1
+    // @Increment: 0.01
+    // @User: Standard
+    GSCALAR(hydrofoil_trim_front_right, "HFOL_TRIM_FR", 0),
+
+    // @Param: HFOL_TRIM_REAR
+    // @DisplayName: Hydrofoil rear wing trim
+    // @Description: Mechanical trim offset for rear wing in normalized units (-1 to 1). Applied after all calculations to compensate for misalignment. Does not affect servo scaling.
+    // @Range: -1 1
+    // @Increment: 0.01
+    // @User: Standard
+    GSCALAR(hydrofoil_trim_rear, "HFOL_TRIM_REAR", 0),
+
     AP_VAREND
 };
 

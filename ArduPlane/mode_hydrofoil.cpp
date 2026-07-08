@@ -143,34 +143,59 @@ void ModeHydrofoil::update()
     // Update rangefinder filtering
     get_filtered_rangefinder_cm();
 
-    // Debug telemetry: log all PID values every 1 second
+    // Debug telemetry: filtered by HFOL_DEBUG_MASK bitmask
     const uint32_t now_ms = AP_HAL::millis();
     static uint32_t last_debug_log_ms = 0;
     if (now_ms - last_debug_log_ms > 1000) {
         last_debug_log_ms = now_ms;
-        gcs().send_text(MAV_SEVERITY_INFO, "HFOL: Alt=%.1fcm Spd=%.1fm/s St=%d CtrlEn=%d",
-                        filtered_altitude_cm, speed_estimate_ms, (int)current_state,
-                        (int)plane.g.hydrofoil_ctrl_enable.get());
-        gcs().send_text(MAV_SEVERITY_INFO, "PITCH: P=%.3f I=%.3f D=%.3f Out=%.3f",
-                        (double)plane.g2.hydrofoil_pitch_P.get(),
-                        (double)plane.g2.hydrofoil_pitch_I.get(),
-                        (double)plane.g2.hydrofoil_pitch_D.get(),
-                        (double)pitch_pid_out);
-        gcs().send_text(MAV_SEVERITY_INFO, "ALT: P=%.3f I=%.3f D=%.3f Out=%.3f",
-                        (double)plane.g2.hydrofoil_alt_P.get(),
-                        (double)plane.g2.hydrofoil_alt_I.get(),
-                        (double)plane.g2.hydrofoil_alt_D.get(),
-                        (double)altitude_pid_out);
-        gcs().send_text(MAV_SEVERITY_INFO, "ROLL: P=%.3f I=%.3f D=%.3f Out=%.3f",
-                        (double)plane.g2.hydrofoil_roll_P.get(),
-                        (double)plane.g2.hydrofoil_roll_I.get(),
-                        (double)plane.g2.hydrofoil_roll_D.get(),
-                        (double)roll_pid_out);
-        gcs().send_text(MAV_SEVERITY_INFO, "SPEED: P=%.3f I=%.3f D=%.3f Out=%.3f",
-                        (double)plane.g2.hydrofoil_speed_P.get(),
-                        (double)plane.g2.hydrofoil_speed_I.get(),
-                        (double)plane.g2.hydrofoil_speed_D.get(),
-                        (double)speed_pid_out);
+        const uint8_t debug_mask = plane.g.hydrofoil_debug_mask.get();
+
+        // Bit 4: State/General info
+        if (debug_mask & 16) {
+            gcs().send_text(MAV_SEVERITY_INFO, "HFOL: Alt=%.1fcm Spd=%.1fm/s St=%d CtrlEn=%d",
+                            filtered_altitude_cm, speed_estimate_ms, (int)current_state,
+                            (int)plane.g.hydrofoil_ctrl_enable.get());
+        }
+
+        // Bit 0: Pitch debug (shows setpoint, current, error, output)
+        if (debug_mask & 1) {
+            const float pitch_setpoint = 0.0f + altitude_pid_out;  // 0° + altitude correction
+            const float pitch_current = plane.ahrs.pitch_sensor * 0.01f;
+            const float pitch_error = pitch_setpoint - pitch_current;
+            gcs().send_text(MAV_SEVERITY_INFO, "PITCH: SP=%.2f Cur=%.2f Err=%.2f Out=%.3f P/I/D=%.3f/%.3f/%.3f",
+                            (double)pitch_setpoint, (double)pitch_current, (double)pitch_error,
+                            (double)pitch_pid_out,
+                            (double)plane.g2.hydrofoil_pitch_P.get(),
+                            (double)plane.g2.hydrofoil_pitch_I.get(),
+                            (double)plane.g2.hydrofoil_pitch_D.get());
+        }
+
+        // Bit 1: Altitude debug
+        if (debug_mask & 2) {
+            gcs().send_text(MAV_SEVERITY_INFO, "ALT: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                            (double)plane.g2.hydrofoil_alt_P.get(),
+                            (double)plane.g2.hydrofoil_alt_I.get(),
+                            (double)plane.g2.hydrofoil_alt_D.get(),
+                            (double)altitude_pid_out);
+        }
+
+        // Bit 2: Roll debug
+        if (debug_mask & 4) {
+            gcs().send_text(MAV_SEVERITY_INFO, "ROLL: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                            (double)plane.g2.hydrofoil_roll_P.get(),
+                            (double)plane.g2.hydrofoil_roll_I.get(),
+                            (double)plane.g2.hydrofoil_roll_D.get(),
+                            (double)roll_pid_out);
+        }
+
+        // Bit 3: Speed debug
+        if (debug_mask & 8) {
+            gcs().send_text(MAV_SEVERITY_INFO, "SPEED: P=%.3f I=%.3f D=%.3f Out=%.3f",
+                            (double)plane.g2.hydrofoil_speed_P.get(),
+                            (double)plane.g2.hydrofoil_speed_I.get(),
+                            (double)plane.g2.hydrofoil_speed_D.get(),
+                            (double)speed_pid_out);
+        }
     }
 
     // Run state machine
@@ -444,7 +469,7 @@ float ModeHydrofoil::get_feedforward_front(float speed_ms)
 
     // K / v² hyperbola - K is tuned to produce normalized output directly
     const float K = plane.g2.hydrofoil_K_front;
-    return K / (speed_ms * speed_ms);
+    return constrain_float(K / (speed_ms * speed_ms), -0.5, 0.5);
 }
 
 float ModeHydrofoil::get_feedforward_rear(float speed_ms)
@@ -455,7 +480,7 @@ float ModeHydrofoil::get_feedforward_rear(float speed_ms)
 
     // K / v² hyperbola - K is tuned to produce normalized output directly
     const float K = plane.g2.hydrofoil_K_rear;
-    return K / (speed_ms * speed_ms);
+    return constrain_float(K / (speed_ms * speed_ms), -0.7, 0.7);
 }
 
 // ============================================================================
@@ -464,13 +489,18 @@ float ModeHydrofoil::get_feedforward_rear(float speed_ms)
 
 float ModeHydrofoil::pitch_controller()
 {
+    // CASCADE ARCHITECTURE: Pitch controller tracks commanded pitch angle
+    // Commanded pitch = 0° (level) + altitude_pid_out (±3° for altitude control)
+    // Controls rear wing to achieve desired hull pitch
+
     // Check if pitch controller is enabled (bit 0)
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 1)) {
         return plane.pitch_in_expo(false) / 4500.0f;
     }
 
-    // Target: 0° hull pitch at all times
-    const float target_pitch_deg = 0.0f;
+    // Target pitch: 0° baseline + altitude correction from outer loop
+    // altitude_pid_out contains pitch command (±3°) from altitude controller
+    const float target_pitch_deg = 0.0f + altitude_pid_out;
     const float current_pitch_deg = plane.ahrs.pitch_sensor * 0.01f;  // centidegrees to degrees
     const float pitch_error = target_pitch_deg - current_pitch_deg;
 
@@ -482,32 +512,40 @@ float ModeHydrofoil::pitch_controller()
     const float gain_scale = get_gain_scale_factor();
 
     // PID calculation
+    // Input: pitch error in degrees
+    // Output: normalized wing deflection (-1 to +1)
     const float dt = 0.0025f;  // 400Hz
     const float P = plane.g2.hydrofoil_pitch_P * gain_scale;
     const float I = plane.g2.hydrofoil_pitch_I * gain_scale;
     const float D = plane.g2.hydrofoil_pitch_D * gain_scale;
 
-    // P term
+    // P term (degrees → normalized)
     float output = P * pitch_error;
 
-    // I term with anti-windup
+    // I term with anti-windup (normalized units)
     pitch_integrator += I * pitch_error * dt;
-    pitch_integrator = constrain_float(pitch_integrator, -5.0f, 5.0f);
+    pitch_integrator = constrain_float(pitch_integrator, -0.5f, 0.5f);
     output += pitch_integrator;
 
-    // D term on rate (not derivative of error)
+    // D term on rate (degrees/s → normalized)
     output -= D * pitch_rate_degps;
 
-    return output;
+    // Constrain output to normalized range
+    return constrain_float(output, -1.0f, 1.0f);
 }
 
 float ModeHydrofoil::altitude_controller()
 {
+    // CASCADE ARCHITECTURE: Altitude controller outputs PITCH COMMAND (degrees)
+    // At constant speed, pitch angle controls altitude:
+    // - Pitch up → more AoA on all surfaces → more lift → altitude increases
+    // - Pitch down → less AoA → less lift → altitude decreases
+    // Front wings stay at feedforward AoA (decoupled, reserved for roll)
+
     // Check if altitude controller is enabled (bit 1)
     if (!(plane.g.hydrofoil_ctrl_enable.get() & 2)) {
-        // Disabled: return manual pitch stick input (normalized -1 to +1)
-        // Pitch stick controls front wing collective when altitude PID is off
-        return plane.pitch_in_expo(false)  / 4500.0f;
+        // Disabled: return 0° pitch correction (maintain level flight)
+        return 0.0f;
     }
 
     // Target altitude with RC offset
@@ -516,30 +554,31 @@ float ModeHydrofoil::altitude_controller()
     const float altitude_error = target_alt_cm - current_alt_cm;
 
     // Estimate vertical velocity from pitch and forward speed
-    const float pitch_rad = radians(plane.ahrs.pitch_sensor * 0.01f);
-    const float vertical_vel_mps = speed_estimate_ms * sinf(pitch_rad);
+    const float vertical_vel_mps = get_vertical_velocity_ms();
 
     // Apply gain scheduling
     const float gain_scale = get_gain_scale_factor();
 
-    // PID calculation (outer loop runs at rangefinder rate, inner loop at IMU rate)
+    // PID calculation - outputs desired pitch angle correction (degrees)
     const float dt = 0.0025f;
     const float P = plane.g2.hydrofoil_alt_P * gain_scale;
     const float I = plane.g2.hydrofoil_alt_I * gain_scale;
     const float D = plane.g2.hydrofoil_alt_D * gain_scale;
 
-    // P term
-    float output = P * altitude_error * 0.01f;  // cm to meters
+    // P term - altitude error (cm) to pitch command (degrees)
+    float pitch_cmd = P * altitude_error * 0.01f;  // cm to meters
 
     // I term with anti-windup
     altitude_integrator += I * altitude_error * 0.01f * dt;
     altitude_integrator = constrain_float(altitude_integrator, -3.0f, 3.0f);
-    output += altitude_integrator;
+    pitch_cmd += altitude_integrator;
 
     // D term on vertical velocity (damping)
-    output -= D * vertical_vel_mps;
+    pitch_cmd -= D * vertical_vel_mps;
 
-    return output;
+    // Limit pitch command to ±3° for safety
+    // This prevents aggressive pitch changes that could destabilize
+    return constrain_float(pitch_cmd, -3.0f, 3.0f);
 }
 
 float ModeHydrofoil::roll_controller()
@@ -655,50 +694,37 @@ float ModeHydrofoil::get_gain_scale_factor()
 
 void ModeHydrofoil::mix_and_output_servos()
 {
-    // Front wings: feedforward + altitude (collective) + roll (differential)
-    const float front_collective = feedforward_front + altitude_pid_out;
+    // CASCADE ARCHITECTURE:
+    // Front wings: feedforward ONLY (decoupled from altitude, reserved for roll)
+    // Altitude control now happens via pitch angle, not front wing deflection
+
+    // Front wings: feedforward + roll (NO altitude_pid_out!)
+    const float front_collective = feedforward_front;
     const float front_left_norm = front_collective + roll_pid_out;
     const float front_right_norm = front_collective - roll_pid_out;
 
-    // Rear wing: feedforward + pitch
+    // Rear wing: feedforward + pitch (pitch now includes altitude command)
     const float rear_norm = feedforward_rear + pitch_pid_out;
 
-    // Convert normalized values (-1.0 to +1.0) to servo output (-4500 to +4500)
-    const int16_t left_servo = constrain_int16(front_left_norm * 4500.0f, -4500, 4500);
-    const int16_t right_servo = constrain_int16(front_right_norm * 4500.0f, -4500, 4500);
-    const int16_t rear_servo = constrain_int16(rear_norm * 4500.0f, -4500, 4500);
+    // Apply per-wing trims (after calculations, before servo conversion)
+    // Trims compensate for mechanical misalignment without affecting servo scaling
+    const float front_left_trimmed = front_left_norm + plane.g.hydrofoil_trim_front_left.get();
+    const float front_right_trimmed = front_right_norm + plane.g.hydrofoil_trim_front_right.get();
+    const float rear_trimmed = rear_norm + plane.g.hydrofoil_trim_rear.get();
+
+    // Convert to servo output - EXACT SAME AS BEFORE for roll
+    const int16_t left_servo = constrain_int16(front_left_trimmed * 4500.0f, -4500, 4500);
+    const int16_t right_servo = constrain_int16(front_right_trimmed * 4500.0f, -4500, 4500);
+    const int16_t rear_servo = constrain_int16(rear_trimmed * 4500.0f, -4500, 4500);
 
     // Output to servos
     // Front left = aileron left, front right = aileron right, rear = elevator
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting1, left_servo);
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting3, right_servo);
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting2, rear_servo);
-  
+
+    // Throttle output (unchanged)
     SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, speed_pid_out * 100.0f);
-}
-
-// ============================================================================
-// SERVO CONVERSION
-// ============================================================================
-
-// Convert wing AoA (degrees) to scaled servo output
-// Accounts for asymmetric servo range: -2.4° to +11.8°
-// Servo trim at 1318 PWM = 0° AoA
-int16_t ModeHydrofoil::aoa_to_servo_scaled(float aoa_deg)
-{
-    // Wing servo range (from linkage geometry):
-    // Positive: 0° to +11.8° maps to 0 to +4500 scaled
-    // Negative: 0° to -2.4° maps to 0 to -4500 scaled
-
-    if (aoa_deg >= 0.0f) {
-        // Positive range: 0 to +11.8 degrees
-        const float scale = 4500.0f / 11.8f;  // 381.4 per degree
-        return constrain_int16(aoa_deg * scale, 0, 4500);
-    } else {
-        // Negative range: 0 to -2.4 degrees
-        const float scale = 4500.0f / 2.4f;   // 1875 per degree
-        return constrain_int16(aoa_deg * scale, -4500, 0);
-    }
 }
 
 // ============================================================================
@@ -766,61 +792,4 @@ float ModeHydrofoil::get_vertical_velocity_ms()
     // Estimate vertical velocity from pitch and forward speed
     const float pitch_rad = radians(plane.ahrs.pitch_sensor * 0.01f);
     return speed_estimate_ms * sinf(pitch_rad);
-}
-
-// ============================================================================
-// LOGGING AND TELEMETRY
-// ============================================================================
-
-void ModeHydrofoil::log_data()
-{
-    // TODO: Implement proper ArduPilot logging using Write() with message ID
-    // The WriteBlock() approach below causes crashes - it needs proper log message structure
-
-    /* DISABLED - CAUSES CRASH
-    // Log at 10Hz to avoid overwhelming the logger
-    const uint32_t now_ms = AP_HAL::millis();
-    static uint32_t last_log_ms = 0;
-    if (now_ms - last_log_ms < 100) {
-        return;
-    }
-    last_log_ms = now_ms;
-
-    // Prepare log data structure
-    struct PACKED {
-        uint64_t time_us;
-        uint8_t state;
-        float speed_ms;
-        float altitude_cm;
-        float feedforward_front;
-        float feedforward_rear;
-        float pitch_pid;
-        float altitude_pid;
-        float roll_pid;
-        float pitch_error;
-        float altitude_error;
-        float roll_error;
-        float gain_scale;
-    } pkt;
-
-    pkt.time_us = AP_HAL::micros64();
-    pkt.state = static_cast<uint8_t>(current_state);
-    pkt.speed_ms = speed_estimate_ms;
-    pkt.altitude_cm = filtered_altitude_cm;
-    pkt.feedforward_front = feedforward_front;
-    pkt.feedforward_rear = feedforward_rear;
-    pkt.pitch_pid = pitch_pid_out;
-    pkt.altitude_pid = altitude_pid_out;
-    pkt.roll_pid = roll_pid_out;
-    pkt.pitch_error = -plane.ahrs.pitch_sensor * 0.01f;  // Target is 0
-    pkt.altitude_error = (plane.g.hydrofoil_target_alt_cm + altitude_offset_cm) - filtered_altitude_cm;
-    pkt.roll_error = roll_setpoint_deg - (plane.ahrs.roll_sensor * 0.01f);
-    pkt.gain_scale = get_gain_scale_factor();
-
-    // Write to dataflash - THIS CRASHES!
-    plane.logger.WriteBlock(&pkt, sizeof(pkt));
-    */
-
-    // For now, rely on standard ArduPilot logging (ATT, RATE, GPS, etc.)
-    // Custom hydrofoil logging can be added later using proper log message definition
 }

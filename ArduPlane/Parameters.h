@@ -383,6 +383,10 @@ public:
         k_param_hydrofoil_liftoff_detect_cm,
         k_param_hydrofoil_target_speed,
         k_param_hydrofoil_ctrl_enable,
+        k_param_hydrofoil_debug_mask,
+        k_param_hydrofoil_trim_front_left,
+        k_param_hydrofoil_trim_front_right,
+        k_param_hydrofoil_trim_rear,
 
     };
 
@@ -491,6 +495,10 @@ public:
     AP_Int16 hydrofoil_liftoff_detect_cm;
     AP_Float hydrofoil_target_speed;
     AP_Int8  hydrofoil_ctrl_enable;
+    AP_Int8  hydrofoil_debug_mask;
+    AP_Float hydrofoil_trim_front_left;
+    AP_Float hydrofoil_trim_front_right;
+    AP_Float hydrofoil_trim_rear;
 #if HAL_WITH_IO_MCU
     AP_Int8 override_channel;
 #endif
