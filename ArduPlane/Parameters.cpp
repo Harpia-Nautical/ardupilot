@@ -1067,15 +1067,15 @@ const AP_Param::Info Plane::var_info[] = {
 
     // @Param: HFOL_CTRL_EN
     // @DisplayName: Hydrofoil controller enable
-    // @Description: Bitmask to enable/disable individual control loops for tuning. When disabled, control falls back to manual RC input. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed
-    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed
+    // @Description: Bitmask to enable/disable individual control loops for tuning. When disabled, control falls back to manual RC input. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed, Bit 4: Rudder turn coordination
+    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed, 4:RudderCoord
     // @User: Advanced
     GSCALAR(hydrofoil_ctrl_enable, "HFOL_CTRL_EN", 15),
 
     // @Param: HFOL_DEBUG_MASK
     // @DisplayName: Hydrofoil debug message mask
-    // @Description: Bitmask to select which debug telemetry messages to send. Reduces GCS spam during tuning. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed, Bit 4: State/General
-    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed, 4:State
+    // @Description: Bitmask to select which debug telemetry messages to send. Reduces GCS spam during tuning. Bit 0: Pitch, Bit 1: Altitude, Bit 2: Roll, Bit 3: Speed, Bit 4: State/General, Bit 5: Rudder
+    // @Bitmask: 0:Pitch, 1:Altitude, 2:Roll, 3:Speed, 4:State, 5:Rudder
     // @User: Advanced
     GSCALAR(hydrofoil_debug_mask, "HFOL_DEBUG_MASK", 31),
 
@@ -1510,6 +1510,27 @@ const AP_Param::GroupInfo ParametersG2::var_info[] = {
     // @Range: 0 0.2
     // @User: Advanced
     AP_GROUPINFO("HFOL_SPEED_FF", 56, ParametersG2, hydrofoil_speed_FF, 0.086),
+
+    // @Param: HFOL_RUD_MAX
+    // @DisplayName: Hydrofoil rudder max deflection
+    // @Description: Caps total rudder output (normalized 0-1) in all states. Lower for early water tests.
+    // @Range: 0 1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_RUD_MAX", 57, ParametersG2, hydrofoil_rudder_max, 1.0),
+
+    // @Param: HFOL_YAW_P
+    // @DisplayName: Hydrofoil yaw rate P gain
+    // @Description: Rudder deflection (normalized) per deg/s of coordinated yaw rate error while foiling.
+    // @Range: 0 0.1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_YAW_P", 58, ParametersG2, hydrofoil_yaw_P, 0.01),
+
+    // @Param: HFOL_YAW_FF
+    // @DisplayName: Hydrofoil yaw rate feedforward
+    // @Description: Rudder deflection (normalized) per deg/s of commanded coordinated yaw rate (g*tan(bank)/V) while foiling.
+    // @Range: 0 0.1
+    // @User: Advanced
+    AP_GROUPINFO("HFOL_YAW_FF", 59, ParametersG2, hydrofoil_yaw_FF, 0.01),
 
     AP_GROUPEND
 };

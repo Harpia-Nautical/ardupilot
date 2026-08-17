@@ -1144,6 +1144,7 @@ private:
     float altitude_pid_out;
     float roll_pid_out;
     float speed_pid_out;
+    float rudder_out;
 
     // RC setpoint modifiers
     float altitude_offset_cm;
@@ -1170,6 +1171,7 @@ private:
     float altitude_controller();
     float roll_controller();
     float speed_controller();
+    float rudder_controller();
 
     // Gain scheduling
     float get_gain_scale_factor();

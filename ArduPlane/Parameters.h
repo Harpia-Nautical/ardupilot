@@ -646,6 +646,11 @@ public:
     AP_Float hydrofoil_speed_I;
     AP_Float hydrofoil_speed_D;
     AP_Float hydrofoil_speed_FF;
+
+    // Rudder / yaw
+    AP_Float hydrofoil_rudder_max;
+    AP_Float hydrofoil_yaw_P;
+    AP_Float hydrofoil_yaw_FF;
 };
 
 extern const AP_Param::Info var_info[];

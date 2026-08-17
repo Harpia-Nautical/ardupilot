@@ -27,6 +27,7 @@ ModeHydrofoil::ModeHydrofoil() :
     altitude_pid_out(0.0f),
     roll_pid_out(0.0f),
     speed_pid_out(0.0f),
+    rudder_out(0.0f),
     altitude_offset_cm(0.0f),
     roll_setpoint_deg(0.0f),
     speed_setpoint_ms(0.0f)
@@ -80,6 +81,7 @@ bool ModeHydrofoil::_enter()
     altitude_pid_out = 0.0f;
     roll_pid_out = 0.0f;
     speed_pid_out = 0.0f;
+    rudder_out = 0.0f;
     feedforward_front = 0.0f;
     feedforward_rear = 0.0f;
 
@@ -188,6 +190,15 @@ void ModeHydrofoil::update()
                             (double)roll_pid_out);
         }
 
+        // Bit 5: Rudder debug
+        if (debug_mask & 32) {
+            gcs().send_text(MAV_SEVERITY_INFO, "RUD: Out=%.3f YawRate=%.1f P/FF=%.3f/%.3f",
+                            (double)rudder_out,
+                            (double)degrees(plane.ahrs.get_gyro().z),
+                            (double)plane.g2.hydrofoil_yaw_P.get(),
+                            (double)plane.g2.hydrofoil_yaw_FF.get());
+        }
+
         // Bit 3: Speed debug
         if (debug_mask & 8) {
             gcs().send_text(MAV_SEVERITY_INFO, "SPEED: P=%.3f I=%.3f D=%.3f Out=%.3f",
@@ -200,6 +211,9 @@ void ModeHydrofoil::update()
 
     // Run state machine
     update_state_machine();
+
+    // Rudder: stick steering + turn coordination when foiling
+    rudder_out = rudder_controller();
 
     // Mix and output to servos
     mix_and_output_servos();
@@ -227,7 +241,6 @@ void ModeHydrofoil::update_state_machine()
 
     if (throttle < plane.g.hydrofoil_throttle_min * 0.5f) {
         new_state = State::IDLE;
-        gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: IDLE");
     }
 
     switch (current_state) {
@@ -236,7 +249,6 @@ void ModeHydrofoil::update_state_machine()
             // Transition to ACCELERATION_RUN when throttle applied
             if (throttle > plane.g.hydrofoil_throttle_min) {
                 new_state = State::ACCELERATION_RUN;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: ACCELERATION_RUN");
             }
             break;
 
@@ -246,7 +258,6 @@ void ModeHydrofoil::update_state_machine()
             if (speed >= plane.g.hydrofoil_min_foiling_speed &&
                 altitude_cm > plane.g.hydrofoil_liftoff_detect_cm) {
                 new_state = State::TRANSITION;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: TRANSITION");
             }
             break;
 
@@ -257,12 +268,10 @@ void ModeHydrofoil::update_state_machine()
                 altitude_cm < plane.g.hydrofoil_target_alt_cm * 1.2f &&
                 now_ms - state_entry_time_ms > 2000) {  // At least 2 seconds in transition
                 new_state = State::FOILING;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: FOILING");
             }
             // Fall back if speed too low
             if (speed < plane.g.hydrofoil_min_foiling_speed * 0.9f) {
                 new_state = State::TOUCHDOWN;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: TOUCHDOWN (from transition)");
             }
             break;
 
@@ -271,12 +280,12 @@ void ModeHydrofoil::update_state_machine()
             // Transition to TOUCHDOWN when speed drops
             if (speed < plane.g.hydrofoil_min_foiling_speed * 0.85f) {
                 new_state = State::TOUCHDOWN;
-                gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: TOUCHDOWN");
             }
             // Emergency: rangefinder failure
             if (now_ms - last_rangefinder_update_ms > 1000) {
                 new_state = State::TOUCHDOWN;
-                gcs().send_text(MAV_SEVERITY_WARNING, "Hydrofoil: TOUCHDOWN (rangefinder fail)");
+                // fires once: state leaves FOILING on this same tick
+                gcs().send_text(MAV_SEVERITY_WARNING, "Hydrofoil: rangefinder fail");
             }
             break;
 
@@ -291,18 +300,15 @@ void ModeHydrofoil::update_state_machine()
 
                 if (altitude_condition && speed_condition) {
                     new_state = State::IDLE;
-                    if (rangefinder_dead) {
-                        gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: IDLE (rangefinder failed)");
-                    } else {
-                        gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: IDLE");
-                    }
                 }
             }
             break;
     }
 
-    // State change handling
+    // State change handling - single announcement point, no per-tick spam
     if (new_state != current_state) {
+        static const char *state_names[] = {"IDLE", "ACCEL_RUN", "TRANSITION", "FOILING", "TOUCHDOWN"};
+        gcs().send_text(MAV_SEVERITY_INFO, "Hydrofoil: %s", state_names[(uint8_t)new_state]);
         current_state = new_state;
         state_entry_time_ms = now_ms;
 
@@ -448,7 +454,7 @@ void ModeHydrofoil::update_speed_estimate()
     } else {
         // Between GPS updates: integrate IMU accel
         const Vector3f accel = plane.ahrs.get_accel();
-        const float dt = 0.0025f;  // 400Hz loop rate
+        const float dt = plane.scheduler.get_loop_period_s();
         speed_integrated_since_gps += accel.x * dt;
         speed_estimate_ms += accel.x * dt;
     }
@@ -514,7 +520,7 @@ float ModeHydrofoil::pitch_controller()
     // PID calculation
     // Input: pitch error in degrees
     // Output: normalized wing deflection (-1 to +1)
-    const float dt = 0.0025f;  // 400Hz
+    const float dt = plane.scheduler.get_loop_period_s();
     const float P = plane.g2.hydrofoil_pitch_P * gain_scale;
     const float I = plane.g2.hydrofoil_pitch_I * gain_scale;
     const float D = plane.g2.hydrofoil_pitch_D * gain_scale;
@@ -560,7 +566,7 @@ float ModeHydrofoil::altitude_controller()
     const float gain_scale = get_gain_scale_factor();
 
     // PID calculation - outputs desired pitch angle correction (degrees)
-    const float dt = 0.0025f;
+    const float dt = plane.scheduler.get_loop_period_s();
     const float P = plane.g2.hydrofoil_alt_P * gain_scale;
     const float I = plane.g2.hydrofoil_alt_I * gain_scale;
     const float D = plane.g2.hydrofoil_alt_D * gain_scale;
@@ -603,7 +609,7 @@ float ModeHydrofoil::roll_controller()
     const float gain_scale = get_gain_scale_factor();
 
     // PID calculation
-    const float dt = 0.0025f;
+    const float dt = plane.scheduler.get_loop_period_s();
     const float P = plane.g2.hydrofoil_roll_P * gain_scale;
     const float I = plane.g2.hydrofoil_roll_I * gain_scale;
     const float D = plane.g2.hydrofoil_roll_D * gain_scale;
@@ -643,7 +649,7 @@ float ModeHydrofoil::speed_controller()
     const float gain_scale = get_gain_scale_factor();
 
     // PID calculation
-    const float dt = 0.0025f;  // 400Hz
+    const float dt = plane.scheduler.get_loop_period_s();
     const float P = plane.g2.hydrofoil_speed_P * gain_scale;
     const float I = plane.g2.hydrofoil_speed_I * gain_scale;
     const float D = plane.g2.hydrofoil_speed_D * gain_scale;
@@ -665,6 +671,31 @@ float ModeHydrofoil::speed_controller()
 
     // Output is throttle percentage (0-100%)
     return constrain_float(output * 100.0f, 0.0f, 100.0f);
+}
+
+float ModeHydrofoil::rudder_controller()
+{
+    // Base term (all states): direct yaw stick - boat steering at low speed,
+    // pilot trim/override while foiling
+    float output = plane.rudder_in_expo(false) / 4500.0f;
+
+    // Turn coordination while foiling (bit 4): rudder tracks the coordinated
+    // yaw rate g*tan(bank)/V from measured bank. Rudder side force acts below
+    // the CG, so steering into the turn also heels into the turn - it assists
+    // the front-wing differential rather than fighting it (no countersteer).
+    // ponytail: P+FF only, no I term - integrator windup on a strut rudder
+    // risks ventilation; add I only if steady-state sideslip shows on water
+    const bool foiling = (current_state == State::TRANSITION || current_state == State::FOILING);
+    if (foiling && (plane.g.hydrofoil_ctrl_enable.get() & 16) && speed_estimate_ms > 1.0f) {
+        const float bank_rad = radians(plane.ahrs.roll_sensor * 0.01f);
+        const float yaw_rate_cmd_degps = degrees(GRAVITY_MSS * tanf(bank_rad) / speed_estimate_ms);
+        const float yaw_rate_degps = degrees(plane.ahrs.get_gyro().z);
+        output += plane.g2.hydrofoil_yaw_FF * yaw_rate_cmd_degps;
+        output += plane.g2.hydrofoil_yaw_P * (yaw_rate_cmd_degps - yaw_rate_degps);
+    }
+
+    const float rud_max = plane.g2.hydrofoil_rudder_max;
+    return constrain_float(output, -rud_max, rud_max);
 }
 
 // ============================================================================
@@ -722,6 +753,10 @@ void ModeHydrofoil::mix_and_output_servos()
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting1, left_servo);
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting3, right_servo);
     SRV_Channels::set_output_scaled(SRV_Channel::k_scripting2, rear_servo);
+
+    // Rudder on rear strut
+    SRV_Channels::set_output_scaled(SRV_Channel::k_scripting4,
+                                    constrain_int16(rudder_out * 4500.0f, -4500, 4500));
 
     // Throttle output (unchanged)
     SRV_Channels::set_output_scaled(SRV_Channel::k_throttle, speed_pid_out * 100.0f);
